@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "ts-node ./src/index.ts"
+    "dev": "ts-node ./src/index.ts",
+    "convert-es6-module": "ts-node ./src/convert-to-es6-module.ts"
   },
   "author": "",
   "license": "ISC",
