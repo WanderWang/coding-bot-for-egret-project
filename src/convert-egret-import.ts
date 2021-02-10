@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { Project, SourceFile, ts } from "ts-morph";
+import { Project, SourceFile, ts, TypeNode } from "ts-morph";
 
 async function run(projectPath: string) {
 
@@ -20,51 +20,21 @@ async function run(projectPath: string) {
         tsConfigFilePath: path.join(projectPath, 'tsconfig.json')
     });
     const sourceFiles = project.getSourceFiles().filter(s => !s.isDeclarationFile())
+    sourceFiles.forEach(removeNamespaceCall)
+    sourceFiles.forEach(addImport);
 
-
-    // sourceFiles.forEach(execute);
-
-
-
-
-    // sourceFiles.forEach(removeNamespaceCall)
-    // sourceFiles.forEach(addImport);
-
-    // sourceFiles.forEach(s => {
-    //     s.organizeImports();
-    // })
-    extract();
-
+    sourceFiles.forEach(s => {
+        s.organizeImports();
+    })
 
     project.saveSync();
 
 
-    async function extract() {
-        const indexSourceFile = project.getSourceFileOrThrow('index.ts');
-        for (let source of sourceFiles) {
-            let relative = path.relative(path.dirname(indexSourceFile.getFilePath()), source.getFilePath())
-                .split("\\").join("/")
-                .replace('.ts', '');
-            if (relative.charAt(0) !== '.') {
-                relative = './' + relative;
-            }
-            indexSourceFile.addStatements(`export * from '${relative}';\n`)
-        }
-
-    }
-
     async function addImport(s: SourceFile) {
-        const data = { filename: 'src/components/supportClasses/Range.ts', key: 'Range' };
-        const importFileName = path.join(projectPath, data.filename)
-        let relative = path.relative(path.dirname(s.getFilePath()), importFileName)
-            .split("\\").join("/")
-            .replace('.ts', '');
-        if (relative.charAt(0) !== '.') {
-            relative = './' + relative;
-        }
+        const data = { moduleName: '@egret/tween', keys: ['Tween', 'Ease'] };
         s.addImportDeclaration({
-            namedImports: [{ name: data.key }],
-            moduleSpecifier: relative
+            namedImports: data.keys,
+            moduleSpecifier: data.moduleName
         })
     }
 }
@@ -75,12 +45,15 @@ async function run(projectPath: string) {
 
 async function removeNamespaceCall(source: SourceFile) {
     source.transform((traversal) => {
+
         const node = traversal.visitChildren();
         if (ts.isPropertyAccessExpression(node)) {
             const expression = node.expression;
             if (ts.isIdentifier(expression)) {
-                if (expression.getText() === 'eui') {
-                    // console.log(node.getText())
+                if (expression.getText() === 'egret' && node.name.getText() === 'Tween') {
+                    return node.name;
+                }
+                if (expression.getText() === 'egret' && node.name.getText() === 'Ease') {
                     return node.name;
                 }
             }
@@ -89,7 +62,14 @@ async function removeNamespaceCall(source: SourceFile) {
         if (ts.isTypeReferenceNode(node)) {
             const typeName = node.typeName;
             if (ts.isQualifiedName(typeName)) {
-                if (typeName.left.getText() === 'eui') {
+                if (typeName.left.getText() === 'egret' && typeName.right.getText() === 'Tween') {
+                    const factory = ts.factory;
+                    return factory.createTypeReferenceNode(
+                        typeName.right,
+                        undefined
+                    )
+                }
+                if (typeName.left.getText() === 'egret' && typeName.right.getText() === 'Ease') {
                     const factory = ts.factory;
                     return factory.createTypeReferenceNode(
                         typeName.right,
@@ -103,6 +83,6 @@ async function removeNamespaceCall(source: SourceFile) {
     })
 }
 
-const projectPath = '../egret/packages/eui'
+const projectRoot = process.argv[2].split("\\").join("/")
 
-run(projectPath);
+run(projectRoot);
