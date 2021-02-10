@@ -1,5 +1,6 @@
 import * as path from 'path';
-import { Project, SourceFile, ts, TypeNode } from "ts-morph";
+import { Project, SourceFile } from "ts-morph";
+import { removeNamespaceCall } from './utils';
 
 async function run(projectPath: string) {
 
@@ -20,8 +21,29 @@ async function run(projectPath: string) {
         tsConfigFilePath: path.join(projectPath, 'tsconfig.json')
     });
     const sourceFiles = project.getSourceFiles().filter(s => !s.isDeclarationFile())
-    sourceFiles.forEach(removeNamespaceCall)
-    sourceFiles.forEach(addImport);
+
+
+
+    const items = [
+        { namespace: 'egret', object: 'Tween' },
+        { namespace: 'egret', object: 'Ease' },
+    ]
+    const m = { moduleName: '@egret/tween', keys: ['Tween', 'Ease'] };
+
+    // const items = [
+    //     { namespace: 'egret', object: 'Tween' },
+    //     { namespace: 'egret', object: 'Ease' },
+    // ]
+    // const m = { moduleName: '@egret/tween', keys: ['Tween', 'Ease'] };
+
+
+
+
+    sourceFiles.forEach(removeNamespaceCall(items))
+
+
+
+    sourceFiles.forEach(addImport(m));
 
     sourceFiles.forEach(s => {
         s.organizeImports();
@@ -30,57 +52,23 @@ async function run(projectPath: string) {
     project.saveSync();
 
 
-    async function addImport(s: SourceFile) {
-        const data = { moduleName: '@egret/tween', keys: ['Tween', 'Ease'] };
-        s.addImportDeclaration({
-            namedImports: data.keys,
-            moduleSpecifier: data.moduleName
-        })
-    }
+
 }
 
 
-
-
-
-async function removeNamespaceCall(source: SourceFile) {
-    source.transform((traversal) => {
-
-        const node = traversal.visitChildren();
-        if (ts.isPropertyAccessExpression(node)) {
-            const expression = node.expression;
-            if (ts.isIdentifier(expression)) {
-                if (expression.getText() === 'egret' && node.name.getText() === 'Tween') {
-                    return node.name;
-                }
-                if (expression.getText() === 'egret' && node.name.getText() === 'Ease') {
-                    return node.name;
-                }
+function addImport(data: { moduleName: string, keys: string[] }) {
+    return (s: SourceFile) => {
+        // s.addImportDeclaration({
+        //     namedImports: data.keys,
+        //     moduleSpecifier: data.moduleName
+        // })
+        s.addImportDeclaration(
+            {
+                namespaceImport: 'eui',
+                moduleSpecifier: '@egret/eui'
             }
-        }
-
-        if (ts.isTypeReferenceNode(node)) {
-            const typeName = node.typeName;
-            if (ts.isQualifiedName(typeName)) {
-                if (typeName.left.getText() === 'egret' && typeName.right.getText() === 'Tween') {
-                    const factory = ts.factory;
-                    return factory.createTypeReferenceNode(
-                        typeName.right,
-                        undefined
-                    )
-                }
-                if (typeName.left.getText() === 'egret' && typeName.right.getText() === 'Ease') {
-                    const factory = ts.factory;
-                    return factory.createTypeReferenceNode(
-                        typeName.right,
-                        undefined
-                    )
-                }
-            }
-        }
-
-        return node;
-    })
+        )
+    }
 }
 
 const projectRoot = process.argv[2].split("\\").join("/")
